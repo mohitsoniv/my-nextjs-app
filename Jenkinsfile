@@ -2,13 +2,14 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'node18' // Make sure this is configured in Jenkins
+        nodejs 'node18' // Ensure this version is installed via Jenkins plugin
     }
 
     environment {
         EC2_HOST = 'ec2-user@34.201.241.85'
-        SSH_KEY_ID = 'ec2-ssh-key'           // Must match your Jenkins credentials ID
-        BUILD_DIR = 'out'
+        SSH_KEY_ID = 'ec2-ssh-key'     // Jenkins SSH credentials ID
+        APP_DIR = 'my-nextjs-app'
+        DEPLOY_DIR = '/home/ec2-user/app'
     }
 
     stages {
@@ -21,7 +22,7 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 sh '''
-                    echo "🧹 Cleaning up old node_modules and cache"
+                    echo "🧹 Cleaning previous node_modules and cache"
                     rm -rf node_modules package-lock.json
                     npm cache clean --force
 
@@ -31,10 +32,21 @@ pipeline {
             }
         }
 
-        stage('Build') {
+        stage('Build App') {
             steps {
-                sh 'npm run build'
-                sh 'npm run export' // Exports static files into `out/`
+                sh '''
+                    echo "🏗️ Building the Next.js app"
+                    npm run build
+                '''
+            }
+        }
+
+        stage('Package Standalone Build') {
+            steps {
+                sh '''
+                    mkdir -p packaged-app
+                    cp -r .next standalone public next.config.ts package.json packaged-app/
+                '''
             }
         }
 
@@ -42,11 +54,14 @@ pipeline {
             steps {
                 sshagent (credentials: [env.SSH_KEY_ID]) {
                     sh """
-                        scp -o StrictHostKeyChecking=no -r ${env.BUILD_DIR} ${env.EC2_HOST}:/home/ec2-user/
-                        ssh -o StrictHostKeyChecking=no ${env.EC2_HOST} '
-                            sudo rm -rf /var/www/html/*
-                            sudo cp -r /home/ec2-user/${env.BUILD_DIR}/* /var/www/html/
-                            sudo nginx -t && sudo systemctl reload nginx
+                        echo "🚀 Deploying to EC2: ${EC2_HOST}"
+                        ssh -o StrictHostKeyChecking=no ${EC2_HOST} 'mkdir -p ${DEPLOY_DIR}'
+                        scp -o StrictHostKeyChecking=no -r packaged-app/* ${EC2_HOST}:${DEPLOY_DIR}
+                        ssh -o StrictHostKeyChecking=no ${EC2_HOST} '
+                            cd ${DEPLOY_DIR} &&
+                            npm install --omit=dev &&
+                            pm2 delete all || true &&
+                            pm2 start server.js --name nextjs-app || npm run start
                         '
                     """
                 }
@@ -56,10 +71,10 @@ pipeline {
 
     post {
         success {
-            echo '🚀 Deployed Successfully!'
+            echo '✅ Build and deployment successful!'
         }
         failure {
-            echo '❌ Deployment Failed!'
+            echo '❌ Deployment failed!'
         }
     }
 }
