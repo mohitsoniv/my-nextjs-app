@@ -7,7 +7,7 @@ pipeline {
 
     environment {
         EC2_HOST = 'ec2-user@52.91.227.229'
-        SSH_KEY_ID = 'ec2-ssh-key'     // Jenkins SSH credentials ID
+        SSH_KEY_ID = 'ec2-ssh-key' // ID of SSH credentials in Jenkins
         DEPLOY_DIR = '/var/www/myapp'
     }
 
@@ -22,6 +22,7 @@ pipeline {
             steps {
                 sh '''
                     echo "🔧 Verifying Node.js and npm"
+                    which node
                     node -v
                     npm -v
                 '''
@@ -33,7 +34,7 @@ pipeline {
                 sh '''
                     echo "🧹 Cleaning previous node_modules and cache"
                     rm -rf node_modules package-lock.json || true
-                    npm cache clean --force
+                    npm cache clean --force || true
 
                     echo "📦 Installing dependencies"
                     npm install --legacy-peer-deps
@@ -64,14 +65,18 @@ pipeline {
             steps {
                 sshagent(credentials: ["${SSH_KEY_ID}"]) {
                     sh '''
-                        echo "🚀 Deploying to EC2 (${EC2_HOST})"
+                        echo "🚀 Deploying to EC2: ${EC2_HOST}"
                         scp -r packaged-app/* ${EC2_HOST}:${DEPLOY_DIR}
 
-                        echo "🔄 Restarting app on EC2"
-                        ssh ${EC2_HOST} '
-                            cd ${DEPLOY_DIR} &&
-                            pm2 restart myapp || pm2 start npm --name myapp -- start
-                        '
+                        echo "🔄 Restarting app using PM2"
+                        ssh ${EC2_HOST} << 'EOF'
+                            cd ${DEPLOY_DIR}
+                            if pm2 list | grep -q myapp; then
+                                pm2 restart myapp
+                            else
+                                pm2 start npm --name myapp -- start
+                            fi
+                        EOF
                     '''
                 }
             }
