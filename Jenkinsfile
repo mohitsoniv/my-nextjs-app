@@ -2,12 +2,12 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'node18' // Ensure this matches the name in Jenkins Global Tool Configuration
+        nodejs 'node18' // Must match the name configured in Jenkins Global Tool Configuration
     }
 
     environment {
         EC2_HOST = 'ec2-user@52.91.227.229'
-        SSH_KEY_ID = 'ec2-ssh-key'     // Jenkins SSH credentials ID
+        SSH_KEY_ID = 'ec2-ssh-key' // Jenkins credential ID for the EC2 private key
         DEPLOY_DIR = '/var/www/myapp'
     }
 
@@ -34,7 +34,7 @@ pipeline {
                 sh '''
                     echo "🧹 Cleaning previous node_modules and cache"
                     rm -rf node_modules package-lock.json || true
-                    npm cache clean --force || true
+                    npm cache clean --force
 
                     echo "📦 Installing dependencies"
                     npm install --legacy-peer-deps
@@ -58,6 +58,18 @@ pipeline {
                     mkdir -p packaged-app
                     cp -r .next/standalone public next.config.* package.json packaged-app/
                 '''
+            }
+        }
+
+        stage('Add EC2 Host to known_hosts') {
+            steps {
+                sshagent(credentials: ["${SSH_KEY_ID}"]) {
+                    sh '''
+                        mkdir -p ~/.ssh
+                        ssh-keyscan -H 52.91.227.229 >> ~/.ssh/known_hosts
+                        chmod 644 ~/.ssh/known_hosts
+                    '''
+                }
             }
         }
 
