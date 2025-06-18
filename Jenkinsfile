@@ -51,18 +51,25 @@ pipeline {
             }
         }
 
-        stage('Deploy to EC2') {
-            steps {
-                sshagent(credentials: ["${SSH_KEY_ID}"]) {
-                    sh '''
-                        echo "🚀 Deploying app to EC2..."
-                        scp -r packaged-app/* ${EC2_HOST}:${DEPLOY_DIR}
-                        ssh ${EC2_HOST} 'pm2 restart myapp || pm2 start npm --name myapp -- start'
-                    '''
-                }
-            }
+       stage('Deploy to EC2') {
+    steps {
+        sshagent(credentials: ["${SSH_KEY_ID}"]) {
+            sh '''
+                echo "🚀 Deploying app to EC2..."
+
+                echo "🔐 Trusting EC2 host..."
+                ssh-keyscan -H ${EC2_HOST} >> ~/.ssh/known_hosts
+
+                echo "📦 Copying files..."
+                scp -r packaged-app/* ${EC2_HOST}:${DEPLOY_DIR}
+
+                echo "🔁 Restarting app with PM2..."
+                ssh ${EC2_HOST} 'pm2 restart myapp || pm2 start npm --name myapp -- start'
+            '''
         }
     }
+}
+
 
     post {
         success {
