@@ -1,10 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  output: "standalone", // Enables generating the `.next/standalone` folder
   experimental: {
-    serverActions: {} // Use empty object to enable
-  }
+    serverActions: {}, // Enables support for Server Actions (valid structure)
+  },
 };
 
 export default nextConfig;
