@@ -6,7 +6,7 @@ pipeline {
     }
 
     environment {
-        EC2_HOST = 'ec2-user@34.201.241.85'
+        EC2_HOST = 'ec2-user@52.201.217.125'
         SSH_KEY_ID = 'ec2-ssh-key'     // Jenkins SSH credentials ID
         APP_DIR = 'my-nextjs-app'
         DEPLOY_DIR = '/var/www/myapp' // assuming this is the correct directory
