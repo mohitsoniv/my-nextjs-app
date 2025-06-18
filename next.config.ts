@@ -2,10 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  reactStrictMode: true,
-  swcMinify: true,
   experimental: {
-    serverActions: true,
+    serverActions: {} // Use empty object to enable
   }
 };
 
