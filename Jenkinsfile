@@ -2,14 +2,13 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'node18' // Ensure this version is installed via NodeJS plugin
+        nodejs 'node18' // Make sure Node.js 18 is installed in Jenkins
     }
 
     environment {
         EC2_HOST = 'ec2-user@34.201.241.85'
-        SSH_KEY_ID = 'ec2-ssh-key'     // Jenkins SSH credentials ID
-        APP_DIR = 'my-nextjs-app'
-        DEPLOY_DIR = '/var/www/myapp' // assuming this is the correct directory
+        SSH_KEY_ID = 'ec2-ssh-key' // Replace with your actual Jenkins credentials ID
+        DEPLOY_DIR = '/var/www/myapp'
     }
 
     stages {
@@ -51,25 +50,25 @@ pipeline {
             }
         }
 
-       stage('Deploy to EC2') {
-    steps {
-        sshagent(credentials: ["${SSH_KEY_ID}"]) {
-            sh '''
-                echo "🚀 Deploying app to EC2..."
+        stage('Deploy to EC2') {
+            steps {
+                sshagent(credentials: ["${SSH_KEY_ID}"]) {
+                    sh '''
+                        echo "🚀 Deploying app to EC2..."
 
-                echo "🔐 Trusting EC2 host..."
-                ssh-keyscan -H ${EC2_HOST} >> ~/.ssh/known_hosts
+                        echo "🔐 Trusting EC2 host..."
+                        ssh-keyscan -H 34.201.241.85 >> ~/.ssh/known_hosts
 
-                echo "📦 Copying files..."
-                scp -r packaged-app/* ${EC2_HOST}:${DEPLOY_DIR}
+                        echo "📦 Copying files to EC2..."
+                        scp -r packaged-app/* ${EC2_HOST}:${DEPLOY_DIR}
 
-                echo "🔁 Restarting app with PM2..."
-                ssh ${EC2_HOST} 'pm2 restart myapp || pm2 start npm --name myapp -- start'
-            '''
+                        echo "🔁 Restarting app with PM2..."
+                        ssh ${EC2_HOST} 'pm2 restart myapp || pm2 start npm --name myapp -- start'
+                    '''
+                }
+            }
         }
     }
-}
-
 
     post {
         success {
