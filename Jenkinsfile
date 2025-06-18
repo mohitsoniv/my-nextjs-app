@@ -42,13 +42,15 @@ pipeline {
         }
 
         stage('Package Standalone Build') {
-            steps {
-                sh '''
-                    mkdir -p packaged-app
-                    cp -r .next standalone public next.config.ts package.json packaged-app/
-                '''
-            }
-        }
+    steps {
+        sh '''
+            echo 📦 Packaging standalone build
+            mkdir -p packaged-app
+            cp -r .next/standalone public next.config.ts package.json packaged-app/
+        '''
+    }
+}
+
 
         stage('Deploy to EC2') {
             steps {
