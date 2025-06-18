@@ -20,7 +20,14 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                sh 'npm ci'
+                sh '''
+                    echo "🧹 Cleaning up old node_modules and cache"
+                    rm -rf node_modules package-lock.json
+                    npm cache clean --force
+
+                    echo "📦 Installing dependencies"
+                    npm install --legacy-peer-deps
+                '''
             }
         }
 
