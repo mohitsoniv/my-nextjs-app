@@ -6,7 +6,7 @@ pipeline {
     }
 
     environment {
-        EC2_HOST = 'ec2-user@52.201.217.125'
+        EC2_HOST = 'ec2-user@52.91.227.229'
         SSH_KEY_ID = 'ec2-ssh-key'     // Jenkins SSH credentials ID
         DEPLOY_DIR = '/var/www/myapp'
     }
