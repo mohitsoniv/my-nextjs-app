@@ -2,14 +2,14 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'node18' // Ensure this version is installed via Jenkins plugin
+        nodejs 'node18' // Ensure this version is installed via NodeJS plugin
     }
 
     environment {
         EC2_HOST = 'ec2-user@34.201.241.85'
         SSH_KEY_ID = 'ec2-ssh-key'     // Jenkins SSH credentials ID
         APP_DIR = 'my-nextjs-app'
-        DEPLOY_DIR = '/home/ec2-user/app'
+        DEPLOY_DIR = '/var/www/myapp' // assuming this is the correct directory
     }
 
     stages {
@@ -42,30 +42,23 @@ pipeline {
         }
 
         stage('Package Standalone Build') {
-    steps {
-        sh '''
-            echo 📦 Packaging standalone build
-            mkdir -p packaged-app
-            cp -r .next/standalone public next.config.ts package.json packaged-app/
-        '''
-    }
-}
-
+            steps {
+                sh '''
+                    echo "📦 Packaging standalone build"
+                    mkdir -p packaged-app
+                    cp -r .next/standalone public next.config.ts package.json packaged-app/
+                '''
+            }
+        }
 
         stage('Deploy to EC2') {
             steps {
-                sshagent (credentials: [env.SSH_KEY_ID]) {
-                    sh """
-                        echo "🚀 Deploying to EC2: ${EC2_HOST}"
-                        ssh -o StrictHostKeyChecking=no ${EC2_HOST} 'mkdir -p ${DEPLOY_DIR}'
-                        scp -o StrictHostKeyChecking=no -r packaged-app/* ${EC2_HOST}:${DEPLOY_DIR}
-                        ssh -o StrictHostKeyChecking=no ${EC2_HOST} '
-                            cd ${DEPLOY_DIR} &&
-                            npm install --omit=dev &&
-                            pm2 delete all || true &&
-                            pm2 start server.js --name nextjs-app || npm run start
-                        '
-                    """
+                sshagent(credentials: ["${SSH_KEY_ID}"]) {
+                    sh '''
+                        echo "🚀 Deploying app to EC2..."
+                        scp -r packaged-app/* ${EC2_HOST}:${DEPLOY_DIR}
+                        ssh ${EC2_HOST} 'pm2 restart myapp || pm2 start npm --name myapp -- start'
+                    '''
                 }
             }
         }
