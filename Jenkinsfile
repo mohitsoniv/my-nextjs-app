@@ -73,18 +73,19 @@ pipeline {
             }
         }
 
-       stage('Deploy to EC2') {
-    steps {
-        sshagent (credentials: ['ec2-ssh-key']) {
-            sh '''
-                echo 🚀 Connecting to EC2 (ubuntu@52.91.227.229)
-                ssh -o StrictHostKeyChecking=no ubuntu@52.91.227.229 "mkdir -p /var/www/myapp"
-                echo 📦 Transferring files...
-                scp -r packaged-app/* ubuntu@52.91.227.229:/var/www/myapp
-            '''
+        stage('Deploy to EC2') {
+            steps {
+                sshagent (credentials: ["${SSH_KEY_ID}"]) {
+                    sh '''
+                        echo "🚀 Connecting to EC2 (ubuntu@52.91.227.229)"
+                        ssh -o StrictHostKeyChecking=no ubuntu@52.91.227.229 "mkdir -p /var/www/myapp"
+                        echo "📦 Transferring files..."
+                        scp -r packaged-app/* ubuntu@52.91.227.229:/var/www/myapp
+                    '''
+                }
+            }
         }
     }
-}
 
     post {
         success {
