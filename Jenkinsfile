@@ -2,12 +2,14 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'node18' // Must match the name configured in Jenkins Global Tool Configuration
+        nodejs 'node18' // Name from Jenkins Global Tool Configuration
     }
 
     environment {
-        EC2_HOST = 'ec2-user@52.91.227.229'
-        SSH_KEY_ID = 'ec2-ssh-key' // Jenkins credential ID for the EC2 private key
+        EC2_USER = 'ubuntu'
+        EC2_IP = '52.91.227.229'
+        EC2_HOST = "${EC2_USER}@${EC2_IP}"
+        SSH_KEY_ID = 'ec2-ssh-key' // Jenkins credential ID
         DEPLOY_DIR = '/var/www/myapp'
     }
 
@@ -22,7 +24,7 @@ pipeline {
             steps {
                 sh '''
                     echo "🔧 Verifying Node.js and npm"
-                    echo "Node location: $(which node)"
+                    echo "Node: $(which node)"
                     node -v
                     npm -v
                 '''
@@ -32,10 +34,9 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 sh '''
-                    echo "🧹 Cleaning previous node_modules and cache"
+                    echo "🧹 Cleaning previous installs"
                     rm -rf node_modules package-lock.json || true
                     npm cache clean --force
-
                     echo "📦 Installing dependencies"
                     npm install --legacy-peer-deps
                 '''
@@ -65,8 +66,9 @@ pipeline {
             steps {
                 sshagent(credentials: ["${SSH_KEY_ID}"]) {
                     sh '''
+                        echo "🔐 Adding EC2 to known_hosts"
                         mkdir -p ~/.ssh
-                        ssh-keyscan -H 52.91.227.229 >> ~/.ssh/known_hosts
+                        ssh-keyscan -H ${EC2_IP} >> ~/.ssh/known_hosts
                         chmod 644 ~/.ssh/known_hosts
                     '''
                 }
@@ -75,12 +77,13 @@ pipeline {
 
         stage('Deploy to EC2') {
             steps {
-                sshagent (credentials: ["${SSH_KEY_ID}"]) {
+                sshagent(credentials: ["${SSH_KEY_ID}"]) {
                     sh '''
-                        echo "🚀 Connecting to EC2 (ubuntu@52.91.227.229)"
-                        ssh -o StrictHostKeyChecking=no ubuntu@52.91.227.229 "mkdir -p /var/www/myapp"
-                        echo "📦 Transferring files..."
-                        scp -r packaged-app/* ubuntu@52.91.227.229:/var/www/myapp
+                        echo "🚀 Connecting to EC2 (${EC2_HOST})"
+                        ssh -o StrictHostKeyChecking=no ${EC2_HOST} "sudo mkdir -p ${DEPLOY_DIR} && sudo chown -R ${EC2_USER}:${EC2_USER} ${DEPLOY_DIR}"
+
+                        echo "📤 Transferring files to EC2"
+                        scp -r packaged-app/* ${EC2_HOST}:${DEPLOY_DIR}
                     '''
                 }
             }
@@ -92,7 +95,7 @@ pipeline {
             echo '✅ Build and deployment successful!'
         }
         failure {
-            echo '❌ Deployment failed!'
+            echo '❌ Deployment failed. Check the logs above for details.'
         }
     }
 }
