@@ -6,16 +6,17 @@ pipeline {
     }
 
     environment {
-        EC2_USER = 'ubuntu'
-        EC2_IP = '3.86.102.166'
-        EC2_HOST = "${EC2_USER}@${EC2_IP}"
-        SSH_KEY_ID = 'ec2-ssh-key'
-        DEPLOY_DIR = '/var/www/myapp'
-        APP_NAME = 'my-next-app'
-        LOG_FILE = '/var/www/myapp/app.log'
+        EC2_USER    = 'ubuntu'
+        EC2_IP      = '3.86.102.166'
+        EC2_HOST    = "${EC2_USER}@${EC2_IP}"
+        SSH_KEY_ID  = 'ec2-ssh-key'
+        DEPLOY_DIR  = '/var/www/myapp'
+        APP_NAME    = 'my-next-app'
+        LOG_FILE    = "${DEPLOY_DIR}/app.log"
     }
 
     stages {
+
         stage('Checkout Code') {
             steps {
                 git 'https://github.com/mohitsoniv/my-nextjs-app.git'
@@ -56,7 +57,8 @@ pipeline {
                     echo "📦 Preparing app package"
                     mkdir -p packaged-app
                     cp -r .next public node_modules packaged-app/
-                    cp package*.json next.config.* ecosystem.config.js || true packaged-app/
+                    cp package*.json next.config.* || true
+                    mv package*.json next.config.* packaged-app/ || true
                 '''
             }
         }
@@ -65,7 +67,7 @@ pipeline {
             steps {
                 sshagent(credentials: ["${SSH_KEY_ID}"]) {
                     sh '''
-                        echo "🔐 Adding EC2 host to known_hosts"
+                        echo "🔐 Adding EC2 to known_hosts"
                         mkdir -p ~/.ssh
                         ssh-keyscan -H ${EC2_IP} >> ~/.ssh/known_hosts
                     '''
@@ -116,23 +118,22 @@ pipeline {
         }
 
         stage('Healthcheck') {
-    steps {
-        sshagent(credentials: ["${SSH_KEY_ID}"]) {
-            sh '''
-                echo "🔍 Running healthcheck"
-                sleep 15  # 🔼 Increased from 5 to 15
-                STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${EC2_IP})
-                if [ "$STATUS" -ne 200 ]; then
-                    echo "❌ Healthcheck failed with status $STATUS"
-                    exit 1
-                else
-                    echo "✅ Healthcheck passed with status $STATUS"
-                fi
-            '''
+            steps {
+                sshagent(credentials: ["${SSH_KEY_ID}"]) {
+                    sh '''
+                        echo "🔍 Running healthcheck"
+                        sleep 15
+                        STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${EC2_IP})
+                        if [ "$STATUS" -ne 200 ]; then
+                            echo "❌ Healthcheck failed with status $STATUS"
+                            exit 1
+                        else
+                            echo "✅ Healthcheck passed with status $STATUS"
+                        fi
+                    '''
+                }
+            }
         }
-    }
-}
-
 
         stage('Archive Logs') {
             steps {
@@ -149,7 +150,7 @@ pipeline {
 
     post {
         success {
-            echo '✅ Deployment successful: http://${EC2_IP}'
+            echo "✅ Deployment successful: http://${EC2_IP}"
         }
         failure {
             echo '❌ Deployment failed. Check Jenkins and EC2 logs.'
