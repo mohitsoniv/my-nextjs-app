@@ -85,34 +85,34 @@ pipeline {
             }
         }
 
-        stage('Start App with PM2') {
-  steps {
-    sshagent(credentials: [env.SSH_KEY_ID]) {
-      sh label: 'Start app via PM2', script: '''
-        ssh ${EC2_HOST} << 'EOF'
-          set -e
-          cd ${DEPLOY_DIR}
+       stage('Start App with PM2') {
+    steps {
+        sshagent(credentials: ["${SSH_KEY_ID}"]) {
+            sh """
+                ssh ${EC2_HOST} '
+                    set -e
+                    cd ${DEPLOY_DIR}
+                    export HOST=0.0.0.0
+                    export PORT=80
 
-          echo '🔄 Installing/updating PM2 globally'
-          sudo npm install -g pm2
+                    echo "🔄 Installing PM2 globally"
+                    sudo npm install -g pm2
 
-          echo '🧹 Cleaning previous PM2 process'
-          pm2 delete ${APP_NAME} || true
+                    echo "🧹 Cleaning previous PM2 process"
+                    pm2 delete ${APP_NAME} || true
 
-          echo '▶️ Starting Next.js app via PM2'
-          pm2 start npm --name ${APP_NAME} -- start -- --port=80
+                    echo "▶️ Starting Next.js app via PM2"
+                    pm2 start npm --name "${APP_NAME}" -- start -- --port=80
 
-          echo '💾 Saving current PM2 process list'
-          pm2 save
+                    echo "💾 Saving current PM2 process list"
+                    pm2 save
 
-          echo '🔁 Enabling PM2 to start on reboot'
-          sudo env PATH=$PATH:"$(npm root -g)"/.bin pm2 startup systemd -u ${EC2_USER} --hp /home/${EC2_USER}
-
-          sudo systemctl enable pm2-${EC2_USER}
-        EOF
-      '''
+                    echo "🔁 Enabling PM2 to start on reboot"
+                    pm2 startup systemd -u ${EC2_USER} --hp /home/${EC2_USER}
+                '
+            """
+        }
     }
-  }
 }
 
 
