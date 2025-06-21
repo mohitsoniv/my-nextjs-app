@@ -2,14 +2,14 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'node18' // Make sure this matches your Jenkins global tool configuration
+        nodejs 'node18' // Match your Jenkins global tool config
     }
 
     environment {
         EC2_USER = 'ubuntu'
         EC2_IP = '3.86.102.166'
         EC2_HOST = "${EC2_USER}@${EC2_IP}"
-        SSH_KEY_ID = 'ec2-ssh-key' // Jenkins credentials ID for the EC2 private key
+        SSH_KEY_ID = 'ec2-ssh-key' // Jenkins credential ID for private key
         DEPLOY_DIR = '/var/www/myapp'
     }
 
@@ -84,9 +84,24 @@ pipeline {
                     sh '''
                         echo "🚀 Connecting to EC2: ${EC2_HOST}"
                         ssh -o StrictHostKeyChecking=no ${EC2_HOST} "sudo mkdir -p ${DEPLOY_DIR} && sudo chown -R ${EC2_USER}:${EC2_USER} ${DEPLOY_DIR}"
-
+                        
                         echo "📤 Transferring build to EC2"
                         scp -o StrictHostKeyChecking=no -r packaged-app/* ${EC2_HOST}:${DEPLOY_DIR}
+                    '''
+                }
+            }
+        }
+
+        stage('Start App on EC2') {
+            steps {
+                sshagent(credentials: ["${SSH_KEY_ID}"]) {
+                    sh '''
+                        echo "🚀 Starting the app on EC2"
+                        ssh -o StrictHostKeyChecking=no ${EC2_HOST} "
+                            cd ${DEPLOY_DIR} && 
+                            nohup node server.js > app.log 2>&1 &
+                            echo 'App started at http://${EC2_IP}:3000'
+                        "
                     '''
                 }
             }
