@@ -116,16 +116,23 @@ pipeline {
         }
 
         stage('Healthcheck') {
-            steps {
-                sshagent(credentials: ["${SSH_KEY_ID}"]) {
-                    sh '''
-                        echo "🔍 Running healthcheck"
-                        sleep 5
-                        curl -s -o /dev/null -w "%{http_code}" http://${EC2_IP} | grep 200 || (echo "❌ Healthcheck failed" && exit 1)
-                    '''
-                }
-            }
+    steps {
+        sshagent(credentials: ["${SSH_KEY_ID}"]) {
+            sh '''
+                echo "🔍 Running healthcheck"
+                sleep 15  # 🔼 Increased from 5 to 15
+                STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${EC2_IP})
+                if [ "$STATUS" -ne 200 ]; then
+                    echo "❌ Healthcheck failed with status $STATUS"
+                    exit 1
+                else
+                    echo "✅ Healthcheck passed with status $STATUS"
+                fi
+            '''
         }
+    }
+}
+
 
         stage('Archive Logs') {
             steps {
