@@ -86,37 +86,35 @@ pipeline {
         }
 
         stage('Start App with PM2') {
-            steps {
-                sshagent(credentials: [env.SSH_KEY_ID]) {
-                    sh '''
-                        echo "🔁 Starting app with PM2 on EC2"
-                        ssh ${EC2_HOST} '
-                            set -e
-                            cd ${DEPLOY_DIR}
-                            
-                            echo "🌍 Exporting runtime environment"
-                            export HOST=0.0.0.0
-                            export PORT=80
+  steps {
+    sshagent(credentials: [env.SSH_KEY_ID]) {
+      sh label: 'Start app via PM2', script: '''
+        ssh ${EC2_HOST} << 'EOF'
+          set -e
+          cd ${DEPLOY_DIR}
 
-                            echo "📦 Installing PM2"
-                            sudo npm install -g pm2
+          echo '🔄 Installing/updating PM2 globally'
+          sudo npm install -g pm2
 
-                            echo "🧼 Cleaning up old process"
-                            pm2 delete ${APP_NAME} || true
+          echo '🧹 Cleaning previous PM2 process'
+          pm2 delete ${APP_NAME} || true
 
-                            echo "▶️ Starting app via npm (next start)"
-                            pm2 start npm --name ${APP_NAME} -- start -- --port=80
+          echo '▶️ Starting Next.js app via PM2'
+          pm2 start npm --name ${APP_NAME} -- start -- --port=80
 
-                            echo "💾 Saving PM2 process list"
-                            pm2 save
+          echo '💾 Saving current PM2 process list'
+          pm2 save
 
-                            echo "🔁 Enabling PM2 service on boot"
-                            sudo systemctl enable pm2-${EC2_USER}
-                        '
-                    '''
-                }
-            }
-        }
+          echo '🔁 Enabling PM2 to start on reboot'
+          sudo env PATH=$PATH:"$(npm root -g)"/.bin pm2 startup systemd -u ${EC2_USER} --hp /home/${EC2_USER}
+
+          sudo systemctl enable pm2-${EC2_USER}
+        EOF
+      '''
+    }
+  }
+}
+
 
         stage('Healthcheck') {
             steps {
