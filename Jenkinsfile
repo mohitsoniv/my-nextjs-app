@@ -2,15 +2,18 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'node18' // Make sure this matches your Jenkins global tool configuration
+        nodejs 'node18'
     }
 
     environment {
         EC2_USER = 'ubuntu'
         EC2_IP = '3.86.102.166'
         EC2_HOST = "${EC2_USER}@${EC2_IP}"
-        SSH_KEY_ID = 'ec2-ssh-key' // Jenkins credentials ID for the EC2 private key
+        SSH_KEY_ID = 'ec2-ssh-key'
         DEPLOY_DIR = '/var/www/myapp'
+        APP_NAME = 'my-next-app'
+        SERVICE_FILE = '/etc/systemd/system/myapp.service'
+        LOG_FILE = '/var/www/myapp/app.log'
     }
 
     stages {
@@ -34,9 +37,6 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 sh '''
-                    echo "🧹 Cleaning previous installs"
-                    rm -rf node_modules package-lock.json || true
-                    npm cache clean --force || true
                     echo "📦 Installing dependencies"
                     npm install --legacy-peer-deps
                 '''
@@ -46,20 +46,19 @@ pipeline {
         stage('Build App') {
             steps {
                 sh '''
-                    echo "🏗️ Building the Next.js app"
+                    echo "🏗️ Building app"
                     npm run build
                 '''
             }
         }
 
-        stage('Package Standalone Build') {
+        stage('Package App') {
             steps {
                 sh '''
-                    echo "📦 Packaging standalone build"
+                    echo "📦 Packaging app"
                     mkdir -p packaged-app
-                    cp -r .next/standalone packaged-app/
-                    cp -r public packaged-app/ || true
-                    cp next.config.* package.json server.js packaged-app/ || true
+                    cp -r .next public node_modules pages || true packaged-app/
+                    cp package*.json next.config.* server.js app.js ecosystem.config.js || true packaged-app/
                 '''
             }
         }
@@ -68,11 +67,8 @@ pipeline {
             steps {
                 sshagent(credentials: ["${SSH_KEY_ID}"]) {
                     sh '''
-                        echo "🔐 Adding EC2 to known_hosts"
                         mkdir -p ~/.ssh
                         ssh-keyscan -H ${EC2_IP} >> ~/.ssh/known_hosts
-                        chmod 700 ~/.ssh
-                        chmod 644 ~/.ssh/known_hosts
                     '''
                 }
             }
@@ -82,38 +78,71 @@ pipeline {
             steps {
                 sshagent(credentials: ["${SSH_KEY_ID}"]) {
                     sh '''
-                        echo "🚀 Connecting to EC2: ${EC2_HOST}"
-                        ssh -o StrictHostKeyChecking=no ${EC2_HOST} "sudo mkdir -p ${DEPLOY_DIR} && sudo chown -R ${EC2_USER}:${EC2_USER} ${DEPLOY_DIR}"
-                        
-                        echo "📤 Transferring build to EC2"
-                        scp -o StrictHostKeyChecking=no -r packaged-app/* ${EC2_HOST}:${DEPLOY_DIR}
+                        echo "📤 Uploading app to EC2"
+                        ssh ${EC2_HOST} "sudo mkdir -p ${DEPLOY_DIR} && sudo chown -R ${EC2_USER}:${EC2_USER} ${DEPLOY_DIR}"
+                        scp -r packaged-app/* ${EC2_HOST}:${DEPLOY_DIR}
                     '''
                 }
             }
         }
 
-        stage('Start App on EC2') {
+        stage('Start App with PM2 & Enable systemd') {
             steps {
                 sshagent(credentials: ["${SSH_KEY_ID}"]) {
                     sh '''
-                        echo "🚀 Starting the app on EC2 (port 80)"
-                        ssh -o StrictHostKeyChecking=no ${EC2_HOST} "
-                            cd ${DEPLOY_DIR} &&
-                            nohup sudo node server.js --port=80 > app.log 2>&1 &
-                            echo '✅ App started at http://${EC2_IP}/'
-                        "
+                        ssh ${EC2_HOST} '
+                            set -e
+                            cd ${DEPLOY_DIR}
+                            export HOST=0.0.0.0
+                            export PORT=80
+
+                            echo "🛠 Installing PM2 globally"
+                            sudo npm install -g pm2
+
+                            echo "🔄 Restarting with PM2"
+                            pm2 delete ${APP_NAME} || true
+                            pm2 start server.js --name ${APP_NAME} -- --port=80
+                            pm2 save
+
+                            echo "🔁 Generating systemd service"
+                            pm2 startup systemd -u ${EC2_USER} --hp /home/${EC2_USER}
+                        '
                     '''
                 }
+            }
+        }
+
+        stage('Healthcheck') {
+            steps {
+                sshagent(credentials: ["${SSH_KEY_ID}"]) {
+                    sh '''
+                        echo "🔍 Running Healthcheck"
+                        sleep 5
+                        curl -s -o /dev/null -w "%{http_code}" http://${EC2_IP} | grep 200 || (echo "❌ App failed health check" && exit 1)
+                    '''
+                }
+            }
+        }
+
+        stage('Archive Logs from EC2') {
+            steps {
+                sshagent(credentials: ["${SSH_KEY_ID}"]) {
+                    sh '''
+                        echo "📥 Downloading logs from EC2"
+                        scp ${EC2_HOST}:${LOG_FILE} app.log || echo "No log file found"
+                    '''
+                }
+                archiveArtifacts artifacts: 'app.log', allowEmptyArchive: true
             }
         }
     }
 
     post {
         success {
-            echo '✅ Build and deployment successful!'
+            echo '✅ Deployment Complete! Visit: http://3.86.102.166'
         }
         failure {
-            echo '❌ Deployment failed. Please review the logs above.'
+            echo '❌ Something went wrong. Check logs and console output.'
         }
     }
 }
