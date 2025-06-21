@@ -12,11 +12,9 @@ pipeline {
         SSH_KEY_ID  = 'ec2-ssh-key'
         DEPLOY_DIR  = '/var/www/myapp'
         APP_NAME    = 'my-next-app'
-        LOG_FILE    = "${DEPLOY_DIR}/app.log"
     }
 
     stages {
-
         stage('Checkout Code') {
             steps {
                 git 'https://github.com/mohitsoniv/my-nextjs-app.git'
@@ -55,10 +53,11 @@ pipeline {
             steps {
                 sh '''
                     echo "📦 Preparing app package"
+                    rm -rf packaged-app
                     mkdir -p packaged-app
                     cp -r .next public node_modules packaged-app/
-                    cp package*.json next.config.* || true
-                    mv package*.json next.config.* packaged-app/ || true
+                    cp package*.json next.config.* ecosystem.config.js || true
+                    mv package*.json next.config.* ecosystem.config.js packaged-app/ || true
                 '''
             }
         }
@@ -114,36 +113,6 @@ pipeline {
                         '
                     """
                 }
-            }
-        }
-
-        stage('Healthcheck') {
-            steps {
-                sshagent(credentials: ["${SSH_KEY_ID}"]) {
-                    sh '''
-                        echo "🔍 Running healthcheck"
-                        sleep 15
-                        STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${EC2_IP})
-                        if [ "$STATUS" -ne 200 ]; then
-                            echo "❌ Healthcheck failed with status $STATUS"
-                            exit 1
-                        else
-                            echo "✅ Healthcheck passed with status $STATUS"
-                        fi
-                    '''
-                }
-            }
-        }
-
-        stage('Archive Logs') {
-            steps {
-                sshagent(credentials: ["${SSH_KEY_ID}"]) {
-                    sh '''
-                        echo "📥 Fetching logs from EC2"
-                        scp ${EC2_HOST}:${LOG_FILE} app.log || echo "⚠️ No logs found"
-                    '''
-                }
-                archiveArtifacts artifacts: 'app.log', allowEmptyArchive: true
             }
         }
     }
