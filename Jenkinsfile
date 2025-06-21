@@ -2,14 +2,14 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'node18' // Match your Jenkins global tool config
+        nodejs 'node18' // Make sure this matches your Jenkins global tool configuration
     }
 
     environment {
         EC2_USER = 'ubuntu'
         EC2_IP = '3.86.102.166'
         EC2_HOST = "${EC2_USER}@${EC2_IP}"
-        SSH_KEY_ID = 'ec2-ssh-key' // Jenkins credential ID for private key
+        SSH_KEY_ID = 'ec2-ssh-key' // Jenkins credentials ID for the EC2 private key
         DEPLOY_DIR = '/var/www/myapp'
     }
 
@@ -59,7 +59,7 @@ pipeline {
                     mkdir -p packaged-app
                     cp -r .next/standalone packaged-app/
                     cp -r public packaged-app/ || true
-                    cp next.config.* package.json packaged-app/ || true
+                    cp next.config.* package.json server.js packaged-app/ || true
                 '''
             }
         }
@@ -96,11 +96,11 @@ pipeline {
             steps {
                 sshagent(credentials: ["${SSH_KEY_ID}"]) {
                     sh '''
-                        echo "🚀 Starting the app on EC2"
+                        echo "🚀 Starting the app on EC2 (port 80)"
                         ssh -o StrictHostKeyChecking=no ${EC2_HOST} "
-                            cd ${DEPLOY_DIR} && 
-                            nohup node server.js > app.log 2>&1 &
-                            echo 'App started at http://${EC2_IP}:3000'
+                            cd ${DEPLOY_DIR} &&
+                            nohup sudo node server.js --port=80 > app.log 2>&1 &
+                            echo '✅ App started at http://${EC2_IP}/'
                         "
                     '''
                 }
