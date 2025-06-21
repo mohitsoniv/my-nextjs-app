@@ -1,7 +1,0 @@
-module.exports = {
-  output: 'standalone',
-  serverRuntimeConfig: {
-    host: '0.0.0.0',
-    port: 80,
-  },
-};
