@@ -1,21 +1,29 @@
 import type { NextConfig } from "next";
 
 /**
- * Production-ready Next.js configuration
+ * ✅ Production-ready Next.js configuration
  */
 const nextConfig: NextConfig = {
-  output: "standalone", // Required for deploying with custom Node.js servers (like PM2)
+  // Enables standalone output for deploying with PM2 or custom Node.js servers
+  output: "standalone",
 
-  experimental: {
-    serverActions: {}, // Enables the new Server Actions feature (valid for Next.js 14+)
-  },
-
-  // Optional: You can enforce stricter React settings
+  // Enables React strict mode for highlighting potential issues
   reactStrictMode: true,
 
-  // Optional: Add image domain whitelist if using next/image
+  // Enables faster builds and smaller bundles using SWC
+  swcMinify: true,
+
+  // Removes the `X-Powered-By: Next.js` header from HTTP responses
+  poweredByHeader: false,
+
+  // Experimental features (only use if on Next.js 14+)
+  experimental: {
+    serverActions: {}, // Enables new server actions API
+  },
+
+  // Configure remote image domains (required if using next/image with external images)
   images: {
-    domains: ['your-cdn.com'], // Replace with actual domains if needed
+    domains: ["your-cdn.com"], // 🔁 Replace with your actual CDN/image host
   },
 };
 
