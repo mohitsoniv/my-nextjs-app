@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'node18' // Name from Jenkins Global Tool Configuration
+        nodejs 'node18' // Must match the configured name in Jenkins global tools
     }
 
     environment {
@@ -36,7 +36,7 @@ pipeline {
                 sh '''
                     echo "🧹 Cleaning previous installs"
                     rm -rf node_modules package-lock.json || true
-                    npm cache clean --force
+                    npm cache clean --force || true
                     echo "📦 Installing dependencies"
                     npm install --legacy-peer-deps
                 '''
@@ -57,7 +57,9 @@ pipeline {
                 sh '''
                     echo "📦 Packaging standalone build"
                     mkdir -p packaged-app
-                    cp -r .next/standalone public next.config.* package.json packaged-app/
+                    cp -r .next/standalone packaged-app/
+                    cp -r public packaged-app/ || true
+                    cp -r next.config.* package.json packaged-app/ || true
                 '''
             }
         }
@@ -69,6 +71,7 @@ pipeline {
                         echo "🔐 Adding EC2 to known_hosts"
                         mkdir -p ~/.ssh
                         ssh-keyscan -H ${EC2_IP} >> ~/.ssh/known_hosts
+                        chmod 700 ~/.ssh
                         chmod 644 ~/.ssh/known_hosts
                     '''
                 }
@@ -83,7 +86,7 @@ pipeline {
                         ssh -o StrictHostKeyChecking=no ${EC2_HOST} "sudo mkdir -p ${DEPLOY_DIR} && sudo chown -R ${EC2_USER}:${EC2_USER} ${DEPLOY_DIR}"
 
                         echo "📤 Transferring files to EC2"
-                        scp -r packaged-app/* ${EC2_HOST}:${DEPLOY_DIR}
+                        scp -o StrictHostKeyChecking=no -r packaged-app/* ${EC2_HOST}:${DEPLOY_DIR}
                     '''
                 }
             }
